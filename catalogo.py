@@ -62,7 +62,7 @@ def obter_config():
     conn = sqlite3.connect('banco_leoprice_v5.db')
     df = pd.read_sql_query("SELECT * FROM configuracao LIMIT 1", conn)
     conn.close()
-    return df.iloc if not df.empty else None
+    return df.iloc[0] if not df.empty else None
 
 def carregar_produtos():
     conn = sqlite3.connect('banco_leoprice_v5.db')
@@ -97,7 +97,7 @@ with aba_catalogo:
     st.sidebar.header("⚙️ Filtros e Dados")
     if not df_produtos.empty:
         categorias = ["Todos"] + list(df_produtos['categoria'].unique())
-        cat_selecionada = st.sidebar.selectbox("Filtrar por Categoria:", categories)
+        cat_selecionada = st.sidebar.selectbox("Filtrar por Categoria:", categorias)
         if cat_selecionada != "Todos":
             df_produtos = df_produtos[df_produtos['categoria'] == cat_selecionada]
             
@@ -208,9 +208,7 @@ with aba_painel:
             if st.button("Guardar Dados da Loja"):
                 conn = sqlite3.connect('banco_leoprice_v5.db')
                 cursor = conn.cursor()
-                cursor.execute('''
-                    UPDATE configuracao SET nome_loja=?, whatsapp=?, mpesa=?, emola=?, facebook=?, tiktok=? WHERE id=1
-                ''', (n_nome, n_wa, n_mpesa, n_emola, n_fb, n_tk))
+                cursor.execute('UPDATE configuracao SET nome_loja=?, whatsapp=?, mpesa=?, emola=?, facebook=?, tiktok=? WHERE id=1', (n_nome, n_wa, n_mpesa, n_emola, n_fb, n_tk))
                 conn.commit()
                 conn.close()
                 st.success("Dados guardados! Atualize a página.")
@@ -234,6 +232,6 @@ with aba_painel:
                     
                 conn = sqlite3.connect('banco_leoprice_v5.db')
                 cursor = conn.cursor()
-                cursor.execute('''
-                    INSERT INTO produtos (nome, preco, categoria, imagem, descricao)
-                    VALUES (?, ?, ?, ?, ?)
+                cursor.execute('INSERT INTO produtos (nome, preco, categoria, imagem, descricao) VALUES (?, ?, ?, ?, ?)', (p_nome, p_preco, p_cat, bytes_foto, p_desc))
+                conn.commit()
+                conn.close()
