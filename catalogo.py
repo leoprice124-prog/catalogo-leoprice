@@ -66,7 +66,9 @@ def obter_config():
     conn = sqlite3.connect('banco_leoprice_completo.db')
     df = pd.read_sql_query("SELECT * FROM configuracao LIMIT 1", conn)
     conn.close()
-    return df.iloc if not df.empty else None
+    if not df.empty:
+        return df.iloc[0]
+    return None
 
 def carregar_produtos():
     conn = sqlite3.connect('banco_leoprice_completo.db')
@@ -78,8 +80,16 @@ def carregar_produtos():
 aba_catalogo, aba_painel = st.tabs(["🛒 Catálogo de Vendas (Clientes)", "⚙️ Painel de Registo de Produtos"])
 
 config = obter_config()
-nome_loja_atual = config['nome_loja'] if config is not None else "Loja Leoprice"
-whatsapp_atual = config['whatsapp'] if config is not None else "258840000000"
+if config is not None:
+    nome_loja_atual = config['nome_loja']
+    whatsapp_atual = config['whatsapp']
+    mpesa_atual = config['mpesa']
+    emola_atual = config['emola']
+else:
+    nome_loja_atual = "Loja de celulares Leoprice"
+    whatsapp_atual = "258840000000"
+    mpesa_atual = "840000000"
+    emola_atual = "860000000"
 
 if 'carrinho' not in st.session_state:
     st.session_state.carrinho = {}
@@ -162,7 +172,7 @@ with aba_catalogo:
         
         df_completo = carregar_produtos()
         for pid, qtd in carrinho_filtrado.items():
-            prod_row = df_completo[df_completo['id'] == int(pid)].iloc
+            prod_row = df_completo[df_completo['id'] == int(pid)].iloc[0]
             subtotal = prod_row['preco'] * qtd
             total_geral += subtotal
             
@@ -177,10 +187,10 @@ with aba_catalogo:
         mensagem_whatsapp += "---------------------------------\n"
         mensagem_whatsapp += f"💰 *TOTAL A PAGAR:* {total_geral:.2f} MT\n\n"
         
-        if metodo_pago == "M-Pesa" and config is not None:
-            mensagem_whatsapp += f"📌 Conta M-Pesa para envio: *{config['mpesa']}*\n"
-        elif metodo_pago == "e-Mola" and config is not None:
-            mensagem_whatsapp += f"📌 Conta e-Mola para envio: *{config['emola']}*\n"
+        if metodo_pago == "M-Pesa":
+            mensagem_whatsapp += f"📌 Conta M-Pesa para envio: *{mpesa_atual}*\n"
+        elif metodo_pago == "e-Mola":
+            mensagem_whatsapp += f"📌 Conta e-Mola para envio: *{emola_atual}*\n"
             
         st.table(pd.DataFrame(tabela_dados))
         st.markdown(f"## **Total Geral: {total_geral:.2f} MT**")
@@ -214,11 +224,10 @@ with aba_painel:
                 st.error("Por favor, introduza um nome e preço válidos.")
 
     with st.expander("🏬 Atualizar Contactos e Contas da Loja"):
-        if config is not None:
-            n_nome = st.text_input("Nome de Exibição da Loja:", value=config['nome_loja'])
-            n_wa = st.text_input("WhatsApp de Atendimento (ex: 258...):", value=config['whatsapp'])
-            n_mpesa = st.text_input("Número M-Pesa da Loja:", value=config['mpesa'])
-            n_emola = st.text_input("Número e-Mola da Loja:", value=config['emola'])
-            
-            # BLOCO CORRIGIDO: Alinhamento perfeito de 12 espaços para dentro do 'if config is not None:'
-            if st.button("💾 Guardar Definições da Loja"):
+        n_nome = st.text_input("Nome de Exibição da Loja:", value=nome_loja_atual)
+        n_wa = st.text_input("WhatsApp de Atendimento (ex: 258...):", value=whatsapp_atual)
+        n_mpesa = st.text_input("Número M-Pesa da Loja:", value=mpesa_atual)
+        n_emola = st.text_input("Número e-Mola da Loja:", value=emola_atual)
+        
+        # ALINHAMENTO COMPLETAMENTE REFEITO - SEM CONDIÇÃO 'IF' INTERNA PARA FALHAR
+        if st.button("💾 Guardar Definições da Loja"):
