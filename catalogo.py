@@ -199,35 +199,39 @@ with aba_catalogo:
         st.link_button("🚀 Finalizar Encomenda via WhatsApp", f"https://wa.me{whatsapp_atual}?text={texto_final}")
 
 # ==========================================
-# ABA 2: ADMINISTRADOR (REGISTO DE PRODUTOS)
+# ABA 2: ADMINISTRADOR (INTERFACE PLANA E DIRETA)
 # ==========================================
 with aba_painel:
-    st.header("⚙️ Painel Administrativo de Produtos")
+    st.header("⚙️ Painel de Gestão e Configuração")
     
-    with st.expander("➕ Registar Novo Produto no Catálogo", expanded=True):
-        p_nome = st.text_input("Nome do Smartphone ou Acessório:")
-        p_preco = st.number_input("Preço de Venda (MT):", min_value=0.0, step=50.0)
-        p_cat = st.selectbox("Categoria:", ["Smartphones", "Acessórios", "Carregadores", "Outros"])
-        p_desc = st.text_area("Descrição do Item:")
-        p_foto_link = st.text_input("Link da Imagem (URL da foto na internet):", placeholder="https://exemplo.com")
-        
-        if st.button("📦 Guardar e Publicar Produto"):
-            if p_nome and p_preco > 0:
-                conn = sqlite3.connect('banco_leoprice_completo.db')
-                cursor = conn.cursor()
-                cursor.execute('INSERT INTO produtos (nome, preco, categoria, imagem, descricao) VALUES (?, ?, ?, ?, ?)', (p_nome, p_preco, p_cat, p_foto_link, p_desc))
-                conn.commit()
-                conn.close()
-                st.success(f"O produto '{p_nome}' foi registado e já está visível para os clientes!")
-                st.rerun()
-            else:
-                st.error("Por favor, introduza um nome e preço válidos.")
+    st.markdown("### 🏬 Atualizar Contactos e Contas da Loja")
+    n_nome = st.text_input("Nome de Exibição da Loja:", value=nome_loja_atual)
+    n_wa = st.text_input("WhatsApp de Atendimento (ex: 258...):", value=whatsapp_atual)
+    n_mpesa = st.text_input("Número M-Pesa da Loja:", value=mpesa_atual)
+    n_emola = st.text_input("Número e-Mola da Loja:", value=emola_atual)
+    
+    if st.button("💾 Guardar Definições da Loja"):
+        conn = sqlite3.connect('banco_leoprice_completo.db')
+        cursor = conn.cursor()
+        cursor.execute('UPDATE configuracao SET nome_loja=?, whatsapp=?, mpesa=?, emola=? WHERE id=1', (n_nome, n_wa, n_mpesa, n_emola))
+        conn.commit()
+        conn.close()
+        st.success("Configurações atualizadas com sucesso!")
+        st.rerun()
 
-    with st.expander("🏬 Atualizar Contactos e Contas da Loja"):
-        n_nome = st.text_input("Nome de Exibição da Loja:", value=nome_loja_atual)
-        n_wa = st.text_input("WhatsApp de Atendimento (ex: 258...):", value=whatsapp_atual)
-        n_mpesa = st.text_input("Número M-Pesa da Loja:", value=mpesa_atual)
-        n_emola = st.text_input("Número e-Mola da Loja:", value=emola_atual)
-        
-        # ALINHAMENTO COMPLETAMENTE REFEITO - SEM CONDIÇÃO 'IF' INTERNA PARA FALHAR
-        if st.button("💾 Guardar Definições da Loja"):
+    st.markdown("---")
+    st.markdown("### ➕ Registar Novo Produto no Catálogo")
+    p_nome = st.text_input("Nome do Smartphone ou Acessório:")
+    p_preco = st.number_input("Preço de Venda (MT):", min_value=0.0, step=50.0)
+    p_cat = st.selectbox("Categoria:", ["Smartphones", "Acessórios", "Carregadores", "Outros"])
+    p_desc = st.text_area("Descrição do Item:")
+    p_foto_link = st.text_input("Link da Imagem (URL da foto na internet):")
+    
+    if st.button("📦 Guardar e Publicar Produto"):
+        if p_nome and p_preco > 0:
+            conn = sqlite3.connect('banco_leoprice_completo.db')
+            cursor = conn.cursor()
+            cursor.execute('INSERT INTO produtos (nome, preco, categoria, imagem, descricao) VALUES (?, ?, ?, ?, ?)', (p_nome, p_preco, p_cat, p_foto_link, p_desc))
+            conn.commit()
+            conn.close()
+            st.success(f"O produto '{p_nome}' foi registado com sucesso!")
