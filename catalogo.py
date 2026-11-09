@@ -46,7 +46,7 @@ def iniciar_banco():
     ''')
     
     cursor.execute("SELECT COUNT(*) FROM configuracao")
-    if cursor.fetchone()[0] == 0:
+    if cursor.fetchone() == 0:
         cursor.execute('''
             INSERT INTO configuracao (nome_loja, whatsapp, mpesa, emola, facebook, tiktok)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -62,7 +62,7 @@ def obter_config():
     conn = sqlite3.connect('banco_leoprice_v5.db')
     df = pd.read_sql_query("SELECT * FROM configuracao LIMIT 1", conn)
     conn.close()
-    return df.iloc[0] if not df.empty else None
+    return df.iloc if not df.empty else None
 
 def carregar_produtos():
     conn = sqlite3.connect('banco_leoprice_v5.db')
@@ -150,7 +150,7 @@ with aba_catalogo:
         tabela_dados = []
         total_geral = 0.0
         
-        mensagem_whatsapp = f"Olá, {nome_loja_atual}! Gostaria de fechar este pedido:\n\n"
+        mensagem_whatsapp = f"Olá, {nome_loja_atual}! Gostaria de fazer uma encomenda:\n\n"
         if nome_cliente:
             mensagem_whatsapp += f"👤 *Cliente:* {nome_cliente}\n"
         mensagem_whatsapp += f"💳 *Pagamento por:* {metodo_pago}\n"
