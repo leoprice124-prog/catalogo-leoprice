@@ -2,9 +2,10 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 import urllib.parse
+import base64
 
 # 1. CONFIGURAÇÃO VISUAL DA PÁGINA
-st.set_page_config(page_title="Loja Leoprice V5", page_icon="📱", layout="wide")
+st.set_page_config(page_title="Sistema Comercial Leoprice", page_icon="📱", layout="wide")
 
 st.markdown("""
     <style>
@@ -14,122 +15,142 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. BANCO DE DADOS INTEGRADO
+# 2. BANCO DE DADOS INTEGRADO (LOJAS COM LOCALIZAÇÃO E PRODUTOS)
 def iniciar_banco():
-    conn = sqlite3.connect('banco_leoprice_completo.db')
+    conn = sqlite3.connect('banco_leoprice_sistema_v5.db')
     cursor = conn.cursor()
     
+    # Criar a tabela de lojas incluindo o campo de localização
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS configuracao (
+        CREATE TABLE IF NOT EXISTS lojas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome_loja TEXT,
+            nome_loja TEXT UNIQUE,
             whatsapp TEXT,
             mpesa TEXT,
-            emola TEXT
+            emola TEXT,
+            localizacao TEXT
         )
     ''')
     
+    # Verificar se a coluna localizacao existe (caso a tabela já tenha sido criada antes)
+    try:
+        cursor.execute("ALTER TABLE lojas ADD COLUMN localizacao TEXT")
+    except sqlite3.OperationalError:
+        pass  # A coluna já existe
+        
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS produtos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            loja_id INTEGER,
             nome TEXT NOT NULL,
             preco REAL,
             categoria TEXT,
-            imagem TEXT,
-            descricao TEXT
+            imagem_base64 TEXT,
+            descricao TEXT,
+            FOREIGN KEY (loja_id) REFERENCES lojas(id)
         )
     ''')
     
-    cursor.execute("SELECT COUNT(*) FROM configuracao")
+    # Criar a loja padrão se não existir nenhuma
+    cursor.execute("SELECT COUNT(*) FROM lojas")
     if cursor.fetchone() == 0:
         cursor.execute('''
-            INSERT INTO configuracao (nome_loja, whatsapp, mpesa, emola)
-            VALUES (?, ?, ?, ?)
-        ''', ('Loja de celulares Leoprice', '258840000000', '840000000', '860000000'))
+            INSERT INTO lojas (nome_loja, whatsapp, mpesa, emola, localizacao)
+            VALUES (?, ?, ?, ?, ?)
+        ''', ('Cellshop Leoprice', '258840000000', '840000000', '860000000', 'Maputo, Moçambique'))
+        loja_id = cursor.lastrowid
         
-    cursor.execute("SELECT COUNT(*) FROM produtos")
-    if cursor.fetchone() == 0:
+        # Inserir produtos de demonstração iniciais
         produtos_inicial = [
-            ('Samsung Galaxy A32', 15000.0, 'Smartphones', 'https://unsplash.com', '128GB Armazenamento, 4GB RAM.'),
-            ('Película de Vidro 3D', 250.0, 'Acessórios', 'https://unsplash.com', 'Proteção máxima contra riscos.'),
-            ('Capa Antichoque', 450.0, 'Acessórios', 'https://unsplash.com', 'Silicone de alta resistência.')
+            (loja_id, 'Samsung Galaxy A32', 15000.0, 'Smartphones', '', '128GB Armazenamento, 4GB RAM.'),
+            (loja_id, 'Película de Vidro 3D', 250.0, 'Acessórios', '', 'Proteção contra quedas.'),
+            (loja_id, 'Capa Antichoque', 450.0, 'Acessórios', '', 'Silicone reforçado.')
         ]
-        cursor.executemany('INSERT INTO produtos (nome, preco, categoria, imagem, descricao) VALUES (?, ?, ?, ?, ?)', produtos_inicial)
+        cursor.executemany('INSERT INTO produtos (loja_id, nome, preco, categoria, imagem_base64, descricao) VALUES (?, ?, ?, ?, ?, ?)', produtos_inicial)
         
     conn.commit()
     conn.close()
 
 iniciar_banco()
 
-# 3. FUNÇÕES DE LEITURA E ESCRITA
-def obter_config():
-    conn = sqlite3.connect('banco_leoprice_completo.db')
-    df = pd.read_sql_query("SELECT * FROM configuracao LIMIT 1", conn)
-    conn.close()
-    if not df.empty:
-        return df.iloc[0]
-    return None
-
-def carregar_produtos():
-    conn = sqlite3.connect('banco_leoprice_completo.db')
-    df = pd.read_sql_query("SELECT * FROM produtos", conn)
+# 3. FUNÇÕES DE ACESSO AOS DADOS
+def listar_lojas():
+    conn = sqlite3.connect('banco_leoprice_sistema_v5.db')
+    df = pd.read_sql_query("SELECT * FROM lojas", conn)
     conn.close()
     return df
 
-# 4. CONTROLO DE ABAS
-aba_catalogo, aba_painel = st.tabs(["🛒 Catálogo de Vendas (Clientes)", "⚙️ Painel de Registo de Produtos"])
+def carregar_produtos_loja(loja_id):
+    conn = sqlite3.connect('banco_leoprice_sistema_v5.db')
+    df = pd.read_sql_query("SELECT * FROM produtos WHERE loja_id = ?", conn, params=(int(loja_id),))
+    conn.close()
+    return df
 
-config = obter_config()
-if config is not None:
-    nome_loja_atual = config['nome_loja']
-    whatsapp_atual = config['whatsapp']
-    mpesa_atual = config['mpesa']
-    emola_atual = config['emola']
-else:
-    nome_loja_atual = "Loja de celulares Leoprice"
-    whatsapp_atual = "258840000000"
-    mpesa_atual = "840000000"
-    emola_atual = "860000000"
+# 4. GESTÃO E ALTERNÂNCIA DE LOJAS ATIVAS
+df_lojas_todas = listar_lojas()
+st.sidebar.header("🏪 Seleção de Estabelecimento")
+loja_selecionada_nome = st.sidebar.selectbox("Aceder à Loja:", df_lojas_todas['nome_loja'].tolist())
 
+# Obter dados da loja ativa selecionada
+loja_dados = df_lojas_todas[df_lojas_todas['nome_loja'] == loja_selecionada_nome].iloc
+loja_id_atual = int(loja_dados['id'])
+nome_loja_atual = loja_dados['nome_loja']
+whatsapp_atual = loja_dados['whatsapp']
+mpesa_atual = loja_dados['mpesa']
+emola_atual = loja_dados['emola']
+localizacao_atual = loja_dados['localizacao'] if 'localizacao' in loja_dados and loja_dados['localizacao'] else "Não informada"
+
+# Inicializar o carrinho de compras se necessário
 if 'carrinho' not in st.session_state:
     st.session_state.carrinho = {}
 
+# 5. CONTROLO DE NAVEGAÇÃO POR ABAS
+aba_catalogo, aba_painel = st.tabs(["🛒 Catálogo Comercial (Clientes)", "🔒 Painel de Gestão Comercial"])
+
 # ==========================================
-# ABA 1: CLIENTES (CATÁLOGO DE VENDAS)
+# ABA 1: RENDERIZAÇÃO DO CATÁLOGO PARA CLIENTES
 # ==========================================
 with aba_catalogo:
     st.markdown(f"""
         <div class='shop-header'>
             <h1 style='margin:0;color:white;'>🏪 {nome_loja_atual}</h1>
-            <p style='margin:5px 0 0 0;color:white;'>Escolha os produtos abaixo e envie o pedido direto para o nosso WhatsApp!</p>
+            <p style='margin:5px 0 0 0;color:white;'>📍 <b>Localização:</b> {localizacao_atual}</p>
+            <p style='margin:5px 0 0 0;color:white;'>Monte as suas compras e envie o pedido diretamente para o WhatsApp da loja!</p>
         </div>
     """, unsafe_allow_html=True)
     
-    df_produtos = carregar_produtos()
+    df_produtos = carregar_produtos_loja(loja_id_atual)
     
-    # Menu Lateral para o Cliente
-    st.sidebar.header("👤 Dados da Encomenda")
+    # Painel lateral do cliente
+    st.sidebar.markdown("---")
+    st.sidebar.header("👤 Dados de Envio da Encomenda")
     nome_cliente = st.sidebar.text_input("O seu Nome:", placeholder="Ex: Leonardo Francisco")
-    metodo_pago = st.sidebar.selectbox("Pagar via:", ["M-Pesa", "e-Mola", "Dinheiro"])
+    metodo_pago = st.sidebar.selectbox("Efetuar Pagamento por:", ["M-Pesa", "e-Mola", "Dinheiro"])
     
     if not df_produtos.empty:
         st.sidebar.markdown("---")
-        st.sidebar.header("🔍 Categorias")
+        st.sidebar.header("🔍 Filtrar Itens")
         categorias = ["Todos"] + list(df_produtos['categoria'].unique())
-        cat_selecionada = st.sidebar.selectbox("Filtrar:", categories)
+        cat_selecionada = st.sidebar.selectbox("Escolha a categoria:", categories)
         if cat_selecionada != "Todos":
             df_produtos = df_produtos[df_produtos['categoria'] == cat_selecionada]
 
     if df_produtos.empty:
-        st.info("Nenhum produto em exibição de momento.")
+        st.info("De momento, esta loja não tem produtos cadastrados no catálogo.")
     else:
         cols = st.columns(3)
         for idx, row in df_produtos.reset_index().iterrows():
             with cols[idx % 3]:
                 st.markdown("<div class='product-box'>", unsafe_allow_html=True)
                 
-                link_imagem = row['imagem'] if row['imagem'] else "https://placeholder.com"
-                st.image(link_imagem, use_container_width=True)
+                # Exibição inteligente da imagem da galeria (Base64)
+                if row['imagem_base64'] and row['imagem_base64'] != "":
+                    try:
+                        st.image(base64.b64decode(row['imagem_base64']), use_container_width=True)
+                    except:
+                        st.image("https://placeholder.com", use_container_width=True)
+                else:
+                    st.image("https://placeholder.com", use_container_width=True)
                     
                 st.subheader(row['nome'])
                 st.write(f"*{row['descricao']}*")
@@ -141,6 +162,7 @@ with aba_catalogo:
                 
                 c1, c2, c3 = st.columns(3)
                 with c1:
+                    # CORREÇÃO VISUAL: Alterado de '模' de volta para o sinal de menos nativo '➖'
                     if st.button("➖", key=f"sub_{pid}"):
                         st.session_state.carrinho[pid] = max(0, qtd_atual - 1)
                         st.rerun()
@@ -152,86 +174,58 @@ with aba_catalogo:
                         st.rerun()
                 st.markdown("</div>", unsafe_allow_html=True)
 
-    # RESUMO DO PEDIDO DO CLIENTE
+    # FINALIZAÇÃO DA COMPRA (CARRINHO DE COMPRAS)
     st.markdown("---")
-    st.header("🛒 Carrinho de Compras")
+    st.header("🛒 Carrinho de Compras Atual")
     
     carrinho_filtrado = {k: v for k, v in st.session_state.carrinho.items() if v > 0}
     
     if not carrinho_filtrado:
-        st.info("O carrinho está vazio. Adicione itens acima clicando no botão ➕.")
+        st.info("O carrinho está vazio. Escolha os itens nos botões ➕ acima.")
     else:
         tabela_dados = []
         total_geral = 0.0
         
-        mensagem_whatsapp = f"Olá, {nome_loja_atual}! Gostaria de fazer uma encomenda:\n\n"
+        mensagem_whatsapp = f"Olá, {nome_loja_atual}! Gostaria de fechar esta encomenda:\n\n"
         if nome_cliente:
             mensagem_whatsapp += f"👤 *Cliente:* {nome_cliente}\n"
         mensagem_whatsapp += f"💳 *Forma de Pagamento:* {metodo_pago}\n"
+        mensagem_whatsapp += f"📍 *Loja Escolhida:* {nome_loja_atual} ({localizacao_atual})\n"
         mensagem_whatsapp += "---------------------------------\n"
         
-        df_completo = carregar_produtos()
+        df_completo_fecha = carregar_produtos_loja(loja_id_atual)
         for pid, qtd in carrinho_filtrado.items():
-            prod_row = df_completo[df_completo['id'] == int(pid)].iloc[0]
-            subtotal = prod_row['preco'] * qtd
-            total_geral += subtotal
-            
-            tabela_dados.append({
-                "Produto": prod_row['nome'],
-                "Preço": f"{prod_row['preco']:.2f} MT",
-                "Quantidade": qtd,
-                "Subtotal": f"{subtotal:.2f} MT"
-            })
-            mensagem_whatsapp += f"• {qtd}x *{prod_row['nome']}* -> *{subtotal:.2f} MT*\n"
+            linhas_alvo = df_completo_fecha[df_completo_fecha['id'] == int(pid)]
+            if not linhas_alvo.empty:
+                prod_row = linhas_alvo.iloc
+                subtotal = prod_row['preco'] * qtd
+                total_geral += subtotal
+                
+                tabela_dados.append({
+                    "Produto": prod_row['nome'],
+                    "Preço": f"{prod_row['preco']:.2f} MT",
+                    "Quantidade": qtd,
+                    "Subtotal": f"{subtotal:.2f} MT"
+                })
+                mensagem_whatsapp += f"• {qtd}x *{prod_row['nome']}* -> *{subtotal:.2f} MT*\n"
             
         mensagem_whatsapp += "---------------------------------\n"
-        mensagem_whatsapp += f"💰 *TOTAL A PAGAR:* {total_geral:.2f} MT\n\n"
+        mensagem_whatsapp += f"💰 *TOTAL DO PEDIDO:* {total_geral:.2f} MT\n\n"
         
         if metodo_pago == "M-Pesa":
-            mensagem_whatsapp += f"📌 Conta M-Pesa para envio: *{mpesa_atual}*\n"
+            mensagem_whatsapp += f"📌 Enviar valor para M-Pesa: *{mpesa_atual}*\n"
         elif metodo_pago == "e-Mola":
-            mensagem_whatsapp += f"📌 Conta e-Mola para envio: *{emola_atual}*\n"
+            mensagem_whatsapp += f"📌 Enviar valor para e-Mola: *{emola_atual}*\n"
             
         st.table(pd.DataFrame(tabela_dados))
-        st.markdown(f"## **Total Geral: {total_geral:.2f} MT**")
+        st.markdown(f"## **Total Líquido: {total_geral:.2f} MT**")
         
         texto_final = urllib.parse.quote(mensagem_whatsapp)
-        st.link_button("🚀 Finalizar Encomenda via WhatsApp", f"https://wa.me{whatsapp_atual}?text={texto_final}")
+        st.link_button("🚀 Enviar Encomenda Pronta para o WhatsApp", f"https://wa.me{whatsapp_atual}?text={texto_final}")
 
 # ==========================================
-# ABA 2: ADMINISTRADOR (INTERFACE PLANA E DIRETA)
+# ABA 2: PAINEL ADMINISTRATIVO COM PROTEÇÃO DE SENHA
 # ==========================================
 with aba_painel:
-    st.header("⚙️ Painel de Gestão e Configuração")
+    st.header("🔒 Acesso Restrito ao Administrador")
     
-    st.markdown("### 🏬 Atualizar Contactos e Contas da Loja")
-    n_nome = st.text_input("Nome de Exibição da Loja:", value=nome_loja_atual)
-    n_wa = st.text_input("WhatsApp de Atendimento (ex: 258...):", value=whatsapp_atual)
-    n_mpesa = st.text_input("Número M-Pesa da Loja:", value=mpesa_atual)
-    n_emola = st.text_input("Número e-Mola da Loja:", value=emola_atual)
-    
-    if st.button("💾 Guardar Definições da Loja"):
-        conn = sqlite3.connect('banco_leoprice_completo.db')
-        cursor = conn.cursor()
-        cursor.execute('UPDATE configuracao SET nome_loja=?, whatsapp=?, mpesa=?, emola=? WHERE id=1', (n_nome, n_wa, n_mpesa, n_emola))
-        conn.commit()
-        conn.close()
-        st.success("Configurações atualizadas com sucesso!")
-        st.rerun()
-
-    st.markdown("---")
-    st.markdown("### ➕ Registar Novo Produto no Catálogo")
-    p_nome = st.text_input("Nome do Smartphone ou Acessório:")
-    p_preco = st.number_input("Preço de Venda (MT):", min_value=0.0, step=50.0)
-    p_cat = st.selectbox("Categoria:", ["Smartphones", "Acessórios", "Carregadores", "Outros"])
-    p_desc = st.text_area("Descrição do Item:")
-    p_foto_link = st.text_input("Link da Imagem (URL da foto na internet):")
-    
-    if st.button("📦 Guardar e Publicar Produto"):
-        if p_nome and p_preco > 0:
-            conn = sqlite3.connect('banco_leoprice_completo.db')
-            cursor = conn.cursor()
-            cursor.execute('INSERT INTO produtos (nome, preco, categoria, imagem, descricao) VALUES (?, ?, ?, ?, ?)', (p_nome, p_preco, p_cat, p_foto_link, p_desc))
-            conn.commit()
-            conn.close()
-            st.success(f"O produto '{p_nome}' foi registado com sucesso!")
