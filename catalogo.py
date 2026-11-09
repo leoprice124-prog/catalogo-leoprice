@@ -6,7 +6,7 @@ import urllib.parse
 # 1. CONFIGURAÇÃO VISUAL DA PÁGINA
 st.set_page_config(page_title="Cellshop Leoprice - V5 Máxima", page_icon="📱", layout="wide")
 
-# Estilização profissional via CSS (CORREÇÃO CRÍTICA: Mudado para unsafe_allow_html=True)
+# Estilização profissional via CSS
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
@@ -21,6 +21,7 @@ def iniciar_db_maxima():
     conn = sqlite3.connect('catalogo_vendas.db')
     cursor = conn.cursor()
     
+    # Criar a tabela base se não existir
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS produtos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,6 +33,12 @@ def iniciar_db_maxima():
         )
     ''')
     
+    # CORREÇÃO CRÍTICA: Se a tabela já existia sem a coluna 'descricao', adiciona-a agora
+    try:
+        cursor.execute("ALTER TABLE produtos ADD COLUMN descricao TEXT")
+    except sqlite3.OperationalError:
+        pass  # A coluna já existe, não faz nada
+        
     # Verificar se precisamos de preencher com a lista oficial completa
     cursor.execute("SELECT COUNT(*) FROM produtos")
     if cursor.fetchone() == 0:
@@ -50,11 +57,15 @@ def iniciar_db_maxima():
 
 iniciar_db_maxima()
 
-# 3. CARREGAMENTO DOS DADOS
+# 3. CARREGAMENTO DOS DADOS COM GARANTIA DE COLUNAS
 def carregar_produtos_maxima():
     conn = sqlite3.connect('catalogo_vendas.db')
     df = pd.read_sql_query("SELECT * FROM produtos", conn)
     conn.close()
+    
+    # Garante que o DataFrame tem a coluna descricao mesmo se o banco falhar
+    if 'descricao' not in df.columns:
+        df['descricao'] = 'Sem descrição disponível.'
     return df
 
 df_produtos = carregar_produtos_maxima()
@@ -98,7 +109,11 @@ else:
             st.markdown(f'<div class="product-box">', unsafe_allow_html=True)
             st.image(row["imagem"], use_container_width=True)
             st.subheader(row["nome"])
-            st.write(f"*{row['descricao']}*")
+            
+            # Uso seguro do campo descrição
+            desc_texto = row.get("descricao", "Sem descrição.")
+            st.write(f"*{desc_texto}*")
+            
             st.markdown(f"### **{row['preco']:.2f} MT**")
             st.caption(f"📁 Categoria: {row['categoria']}")
             
@@ -118,7 +133,7 @@ else:
                 st.markdown(f"<h4 style='text-align: center; margin-top: 5px;'>{qtd_atual}</h4>", unsafe_with_html=True)
             with col_mais:
                 if st.button("➕", key=f"add_{prod_id}"):
-                    st.session_state.carrinho[prod_id] = st.session_state.get('carrinho', {}).get(prod_id, 0) + 1
+                    st.session_state.carrinho[prod_id] = st.session_state.carrinho.get(prod_id, 0) + 1
                     st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
