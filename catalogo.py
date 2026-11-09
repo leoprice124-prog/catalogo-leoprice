@@ -205,7 +205,6 @@ with aba_painel:
             if p_nome and p_preco > 0:
                 conn = sqlite3.connect('banco_leoprice_completo.db')
                 cursor = conn.cursor()
-                # CORREÇÃO CRÍTICA: Mudado 'category' para 'categoria' para casar com a tabela
                 cursor.execute('INSERT INTO produtos (nome, preco, categoria, imagem, descricao) VALUES (?, ?, ?, ?, ?)', (p_nome, p_preco, p_cat, p_foto_link, p_desc))
                 conn.commit()
                 conn.close()
@@ -221,4 +220,5 @@ with aba_painel:
             n_mpesa = st.text_input("Número M-Pesa da Loja:", value=config['mpesa'])
             n_emola = st.text_input("Número e-Mola da Loja:", value=config['emola'])
             
+            # BLOCO CORRIGIDO: Alinhamento perfeito de 12 espaços para dentro do 'if config is not None:'
             if st.button("💾 Guardar Definições da Loja"):
