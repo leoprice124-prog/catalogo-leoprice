@@ -2,24 +2,38 @@ import streamlit as st
 import pandas as pd
 import sqlite3
 import urllib.parse
+import qrcode
+from io import BytesIO
+from PIL import Image
 
-# 1. CONFIGURAÇÃO VISUAL DA PÁGINA
-st.set_page_config(page_title="Cellshop Leoprice - V5 Máxima", page_icon="📱", layout="wide")
+# 1. CONFIGURAÇÃO DA PÁGINA E DESIGN SYSTEM
+st.set_page_config(page_title="Sistema Comercial V5 Máxima", page_icon="🛍️", layout="wide")
 
-# Estilização profissional via CSS
 st.markdown("""
     <style>
-    .main { background-color: #f8f9fa; }
-    .stButton>button { width: 100%; border-radius: 8px; background-color: #25D366; color: white; font-weight: bold; }
-    .stButton>button:hover { background-color: #128C7E; color: white; }
-    .product-box { padding: 15px; border-radius: 10px; background-color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
+    .main { background-color: #f4f6f9; }
+    .product-box { padding: 20px; border-radius: 12px; background-color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 25px; border: 1px solid #eef2f5; }
+    .shop-header { padding: 20px; border-radius: 10px; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; margin-bottom: 25px; }
+    .stButton>button { width: 100%; border-radius: 8px; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
 
-# 2. BASE DE DADOS COMPLETA DA VERSÃO V5 MÁXIMA
-def iniciar_db_maxima():
-    conn = sqlite3.connect('catalogo_vendas.db')
+# 2. BANCO DE DADOS INTEGRADO (PRODUTOS, LOJAS E CONFIGURAÇÕES)
+def iniciar_banco_completo():
+    conn = sqlite3.connect('sistema_comercial_v5.db')
     cursor = conn.cursor()
+    
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS lojas (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome_loja TEXT,
+            whatsapp TEXT,
+            mpesa_conta TEXT,
+            emola_conta TEXT,
+            facebook TEXT,
+            tiktok TEXT
+        )
+    ''')
     
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS produtos (
@@ -27,149 +41,188 @@ def iniciar_db_maxima():
             nome TEXT NOT NULL,
             preco REAL,
             categoria TEXT,
-            imagem TEXT,
+            imagem BLOB,
             descricao TEXT
         )
     ''')
     
-    try:
-        cursor.execute("ALTER TABLE produtos ADD COLUMN descricao TEXT")
-    except sqlite3.OperationalError:
-        pass
+    # Inserir dados padrão da loja se estiver vazio
+    cursor.execute("SELECT COUNT(*) FROM lojas")
+    if cursor.fetchone()[0] == 0:
+        cursor.execute('''
+            INSERT INTO lojas (nome_loja, whatsapp, mpesa_conta, emola_conta, facebook, tiktok)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', ('Cellshop Leoprice', '258840000000', '841234567', '861234567', 'Cellshop_Leoprice', 'cellshop_leoprice'))
         
-    cursor.execute("SELECT COUNT(*) FROM produtos")
-    if cursor.fetchone() == 0:
-        produtos_v5 = [
-            ('Samsung Galaxy A32', 15000.0, 'Smartphones', 'https://unsplash.com', '128GB Armazenamento, 4GB RAM, Tela Super AMOLED de 6.4".'),
-            ('Película de Vidro 3D', 250.0, 'Acessórios', 'https://unsplash.com', 'Proteção máxima contra quedas e riscos para o ecrã.'),
-            ('Capa Antichoque Militar', 450.0, 'Acessórios', 'https://unsplash.com', 'Bordas reforçadas em silicone de alta resistência.'),
-            ('Carregador Rápido Tipo-C 25W', 1200.0, 'Carregadores', 'https://unsplash.com', 'Carregamento turbo compatível com a linha Samsung.'),
-            ('Auriculares Bluetooth Pro', 2500.0, 'Áudio', 'https://unsplash.com', 'Som de alta fidelity com cancelamento de ruído passivo.'),
-            ('Cabo USB-C Reforçado 2m', 350.0, 'Acessórios', 'https://unsplash.com', 'Cabo em nylon trançado super resistente para dados e carga.')
-        ]
-        cursor.executemany("INSERT INTO produtos (nome, preco, categoria, imagem, descricao) VALUES (?, ?, ?, ?, ?)", produtos_v5)
-    
     conn.commit()
     conn.close()
 
-iniciar_db_maxima()
+iniciar_banco_completo()
 
-# 3. CARREGAMENTO DOS DADOS
-def carregar_produtos_maxima():
-    conn = sqlite3.connect('catalogo_vendas.db')
+# 3. FUNÇÕES DE SUPORTE PARA DADOS
+def obter_dados_loja():
+    conn = sqlite3.connect('sistema_comercial_v5.db')
+    df = pd.read_sql_query("SELECT * FROM lojas LIMIT 1", conn)
+    conn.close()
+    return df.iloc[0] if not df.empty else None
+
+def carregar_produtos():
+    conn = sqlite3.connect('sistema_comercial_v5.db')
     df = pd.read_sql_query("SELECT * FROM produtos", conn)
     conn.close()
-    if 'descricao' not in df.columns:
-        df['descricao'] = 'Sem descrição disponível.'
     return df
 
-df_produtos = carregar_produtos_maxima()
+# 4. GESTÃO DE NAVEGAÇÃO (Abas entre Catálogo e Painel Administrador)
+aba1, aba2 = st.tabs(["🛒 Catálogo da Loja", "⚙️ Painel de Gestão da Loja"])
 
-# 4. INICIALIZAÇÃO DO CARRINHO DE COMPRAS
+dados_loja = obter_dados_loja()
+whatsapp_loja = dados_loja['whatsapp'] if dados_loja is not None else "258840000000"
+nome_loja = dados_loja['nome_loja'] if dados_loja is not None else "Minha Loja"
+
+# Inicializar carrinho de compras no estado da sessão
 if 'carrinho' not in st.session_state:
     st.session_state.carrinho = {}
 
-# 5. ESTRUTURA DA INTERFACE VISUAL
-st.title("🏪 Loja de celulares Leoprice")
-st.subheader("Selecione os produtos de seguida e monte a sua encomenda direta para o WhatsApp!")
+# ==========================================
+# ABA 1: INTERFACE DO CATÁLOGO COMERCIAL
+# ==========================================
+with aba1:
+    st.markdown(f"""
+        <div class='shop-header'>
+            <h1 style='margin:0;'>🏪 {nome_loja}</h1>
+            <p style='margin:5px 0 0 0;'>Monte as suas compras e finalize diretamente pelo WhatsApp!</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    df_prods = carregar_produtos()
+    
+    # Filtro Lateral de Categorias
+    st.sidebar.header("🔍 Filtros de Busca")
+    if not df_prods.empty:
+        cats = ["Todos"] + list(df_prods['categoria'].unique())
+        categoria_sel = st.sidebar.selectbox("Escolha uma categoria:", cats)
+        if categoria_sel != "Todos":
+            df_prods = df_prods[df_prods['categoria'] == categoria_sel]
+    else:
+        st.sidebar.info("Nenhum produto cadastrado no momento.")
+        
+    st.sidebar.markdown("---")
+    st.sidebar.header("👤 Informações do Cliente")
+    nome_cliente = st.sidebar.text_input("Introduza o seu Nome:", placeholder="Ex: Leonardo Francisco")
+    pagamento_sel = st.sidebar.selectbox("Forma de Pagamento Desejada:", ["M-Pesa", "e-Mola", "Dinheiro"])
 
-# Contacto Moçambique
-whatsapp_loja = "258840000000"
-
-# 6. MENU LATERAL
-st.sidebar.header("⚙️ Painel de Filtros")
-if not df_produtos.empty:
-    categorias = ["Todos"] + list(df_produtos["categoria"].unique())
-    categoria_sel = st.sidebar.selectbox("Escolha uma categoria:", categorias)
-else:
-    categoria_sel = "Todos"
-
-df_exibicao = df_produtos if categoria_sel == "Todos" else df_produtos[df_produtos["categoria"] == categoria_sel]
-
-st.sidebar.markdown("---")
-st.sidebar.header("👤 Dados da Encomenda")
-nome_cliente = st.sidebar.text_input("O seu Nome:", placeholder="Ex: Leonardo Francisco")
-opcao_pagamento = st.sidebar.selectbox("Método de Pagamento Preferido:", ["M-Pesa", "e-Mola", "Dinheiro em Mão"])
-
-# 7. EXIBIÇÃO DA GRELHA DE PRODUTOS V5
-if df_exibicao.empty:
-    st.info("Nenhum produto encontrado.")
-else:
-    cols = st.columns(3)
-    for idx, row in df_exibicao.reset_index().iterrows():
-        with cols[idx % 3]:
-            st.markdown(f'<div class="product-box">', unsafe_allow_html=True)
-            st.image(row["imagem"], use_container_width=True)
-            st.subheader(row["nome"])
-            st.write(f"*{row.get('descricao', 'Sem descrição.')}*")
-            st.markdown(f"### **{row['preco']:.2f} MT**")
-            st.caption(f"📁 Categoria: {row['categoria']}")
-            
-            # CORREÇÃO CRÍTICA: st.columns(3) corrigido com a quantidade de colunas definida
-            prod_id = str(row["id"])
-            qtd_atual = st.session_state.carrinho.get(prod_id, 0)
-            
-            col_menos, col_qtd, col_mais = st.columns(3)
-            with col_menos:
-                if st.button("➖", key=f"sub_{prod_id}"):
-                    if prod_id in st.session_state.carrinho:
-                        st.session_state.carrinho[prod_id] = max(0, st.session_state.carrinho[prod_id] - 1)
-                        if st.session_state.carrinho[prod_id] == 0:
-                            del st.session_state.carrinho[prod_id]
+    if df_prods.empty:
+        st.info("Nenhum produto em exibição de momento. Acesse a aba administrativa para adicionar os primeiros produtos através da sua galeria.")
+    else:
+        # Grelha de exibição de produtos (3 por linha)
+        cols = st.columns(3)
+        for idx, row in df_prods.reset_index().iterrows():
+            with cols[idx % 3]:
+                st.markdown("<div class='product-box'>", unsafe_allow_html=True)
+                
+                # Exibição de Imagem da Galeria (BLOB) ou padrão
+                if row['imagem']:
+                    st.image(row['imagem'], use_container_width=True)
+                else:
+                    st.image("https://placeholder.com", use_container_width=True)
+                    
+                st.subheader(row['nome'])
+                st.write(f"*{row['descricao']}*")
+                st.markdown(f"### **{row['preco']:.2f} MT**")
+                st.caption(f"📁 Categoria: {row['categoria']}")
+                
+                # Controlo de quantidades interno
+                pid = str(row['id'])
+                qtd_atual = st.session_state.carrinho.get(pid, 0)
+                
+                c_menos, c_qtd, c_mais = st.columns([1, 1, 1])
+                with c_menos:
+                    if st.button("➖", key=f"btn_sub_{pid}"):
+                        st.session_state.carrinho[pid] = max(0, qtd_atual - 1)
+                        if st.session_state.carrinho[pid] == 0 and pid in st.session_state.carrinho:
+                            del st.session_state.carrinho[pid]
                         st.rerun()
-            with col_qtd:
-                st.markdown(f"<h4 style='text-align: center; margin-top: 5px;'>{qtd_atual}</h4>", unsafe_with_html=True)
-            with col_mais:
-                if st.button("➕", key=f"add_{prod_id}"):
-                    st.session_state.carrinho[prod_id] = qtd_atual + 1
-                    st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
+                with c_qtd:
+                    st.markdown(f"<h4 style='text-align:center; margin-top:5px;'>{qtd_atual}</h4>", unsafe_with_html=False)
+                with c_mais:
+                    if st.button("➕", key=f"btn_add_{pid}"):
+                        st.session_state.carrinho[pid] = qtd_atual + 1
+                        st.rerun()
+                        
+                st.markdown("</div>", unsafe_allow_html=True)
 
-# 8. RESUMO DO CARRINHO DE COMPRAS E LINK WHATSAPP
-st.markdown("---")
-st.header("🛒 Resumo do seu Pedido Atual")
-
-if not st.session_state.carrinho:
-    st.info("O seu carrinho está vazio. Adicione itens clicando no botão ➕ dos produtos acima.")
-else:
-    linhas_resumo = []
-    total_geral = 0.0
-    texto_mensagem_whatsapp = f"Olá, Cellshop Leoprice! Gostaria de fazer uma encomenda.\n\n"
+    # Resumo da Encomenda e Fecho de Carrinho
+    st.markdown("---")
+    st.header("🛒 Resumo da sua Encomenda")
     
-    if nome_cliente:
-        texto_mensagem_whatsapp += f"👤 *Cliente:* {nome_cliente}\n"
-    texto_mensagem_whatsapp += f"💳 *Forma de Pagamento:* {opcao_pagamento}\n"
-    texto_mensagem_whatsapp += "-----------------------------------------\n"
-    texto_mensagem_whatsapp += "📦 *Produtos Escolhidos:*\n"
-
-    for p_id, qtd in st.session_state.carrinho.items():
-        if qtd > 0:
-            prod_info = df_produtos[df_produtos["id"] == int(p_id)].iloc[0]
-            subtotal = prod_info["preco"] * qtd
-            total_geral += subtotal
+    # Filtrar chaves vazias ou com valor zero
+    carrinho_ativo = {k: v for k, v in st.session_state.carrinho.items() if v > 0}
+    
+    if not carrinho_ativo:
+        st.info("O seu carrinho de compras está atualmente vazio.")
+    else:
+        lista_resumo = []
+        total_pagar = 0.0
+        
+        texto_wa = f"Olá, {nome_loja}! Nova encomenda gerada pelo catálogo:\n\n"
+        if nome_cliente:
+            texto_wa += f"👤 *Cliente:* {nome_cliente}\n"
+        texto_wa += f"💳 *Método de Pagamento Escolhido:* {pagamento_sel}\n"
+        texto_wa += "-----------------------------------------\n"
+        
+        for pid, qtd in carrinho_ativo.items():
+            info_p = df_prods[df_prods['id'] == int(pid)].iloc[0]
+            sub = info_p['preco'] * qtd
+            total_pagar += sub
             
-            linhas_resumo.append({
-                "Produto": prod_info["nome"],
-                "Preço Unitário": f"{prod_info['preco']:.2f} MT",
+            lista_resumo.append({
+                "Produto": info_p['nome'],
+                "Preço Unitário": f"{info_p['preco']:.2f} MT",
                 "Quantidade": qtd,
-                "Subtotal": f"{subtotal:.2f} MT"
+                "Subtotal": f"{sub:.2f} MT"
             })
+            texto_wa += f"• {qtd}x *{info_p['nome']}* -> *{sub:.2f} MT*\n"
             
-            texto_mensagem_whatsapp += f"• {qtd}x *{prod_info['nome']}* ({prod_info['preco']:.2f} MT cada) -> Subtotal: *{subtotal:.2f} MT*\n"
+        texto_wa += "-----------------------------------------\n"
+        texto_wa += f"💰 *VALOR TOTAL:* {total_pagar:.2f} MT\n\n"
+        
+        if pagamento_sel == "M-Pesa" and dados_loja is not None:
+            texto_wa += f"📌 Por favor envie o valor para a conta M-Pesa: *{dados_loja['mpesa_conta']}*\n"
+        elif pagamento_sel == "e-Mola" and dados_loja is not None:
+            texto_wa += f"📌 Por favor envie o valor para a conta e-Mola: *{dados_loja['emola_conta']}*\n"
+            
+        st.table(pd.DataFrame(lista_resumo))
+        st.markdown(f"## **Total Final: {total_pagar:.2f} MT**")
+        
+        # Geração dinâmica do QR Code de Pagamento
+        st.markdown("### 📱 QR Code para Pagamento Rápido")
+        info_qr = f"Pagamento para {nome_loja}. Total: {total_pagar:.2f} MT. Conta: " + (dados_loja['mpesa_conta'] if pagamento_sel == "M-Pesa" else dados_loja['emola_conta'])
+        qr = qrcode.QRCode(version=1, box_size=10, border=4)
+        qr.add_data(info_qr)
+        qr.make(fit=True)
+        img_qr = qr.make_image(fill_color="black", back_color="white")
+        
+        buf = BytesIO()
+        img_qr.save(buf, format="PNG")
+        st.image(buf.getvalue(), caption="Aponte a câmera para validar os dados da transferência móvel.", width=250)
+        
+        texto_codificado = urllib.parse.quote(texto_wa)
+        st.link_button("🚀 Concluir Pedido e Enviar via WhatsApp", f"https://wa.me{whatsapp_loja}?text={texto_codificado}")
 
-    texto_mensagem_whatsapp += "-----------------------------------------\n"
-    texto_mensagem_whatsapp += f"💰 *TOTAL DA ENCOMENDA:* {total_geral:.2f} MT\n\n"
-    texto_mensagem_whatsapp += "Por favor, confirmem a disponibilidade para eu efetuar a transferência!"
-
-    st.table(pd.DataFrame(linhas_resumo))
+# ==========================================
+# ABA 2: PAINEL ADMINISTRATIVO (GESTÃO DA LOJA)
+# ==========================================
+with aba2:
+    st.header("⚙️ Painel de Configurações Administrativas")
     
-    col_vazia, col_total = st.columns([2, 1])
-    with col_total:
-        st.markdown(f"## **Total: {total_geral:.2f} MT**")
-        texto_codificado = urllib.parse.quote(texto_mensagem_whatsapp)
-        link_final_wa = f"https://wa.me{whatsapp_loja}?text={texto_codificado}"
-        st.link_button("🚀 Enviar Encomenda Pronta para o WhatsApp", link_final_wa)
-
-st.sidebar.markdown('---')
-st.sidebar.caption('**Seguir nas Redes Sociais:**')
-st.sidebar.caption('• Facebook | • TikTok')
+    # 1. Configurações de Identidade da Loja e Contas Móveis
+    with st.expander("🏬 Editar Dados da Loja e Contas de Pagamento", expanded=False):
+        if dados_loja is not None:
+            novo_nome = st.text_input("Nome Comercial da Loja:", value=dados_loja['nome_loja'])
+            novo_wa = st.text_input("Contacto de WhatsApp (Com código do país, ex: 258...):", value=dados_loja['whatsapp'])
+            novo_mpesa = st.text_input("Número de Conta M-Pesa para Recebimento:", value=dados_loja['mpesa_conta'])
+            novo_emola = st.text_input("Número de Conta e-Mola para Recebimento:", value=dados_loja['emola_conta'])
+            novo_fb = st.text_input("Link do Facebook da Loja:", value=dados_loja['facebook'])
+            novo_tk = st.text_input("Link do TikTok da Loja:", value=dados_loja['tiktok'])
+            
+            if st.button("💾 Guardar Configurações Comerciais"):
