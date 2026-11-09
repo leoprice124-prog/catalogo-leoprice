@@ -6,30 +6,29 @@ import qrcode
 from io import BytesIO
 from PIL import Image
 
-# 1. CONFIGURAÇÃO DA PÁGINA E DESIGN SYSTEM
-st.set_page_config(page_title="Sistema Comercial V5 Máxima", page_icon="🛍️", layout="wide")
+# 1. CONFIGURAÇÃO VISUAL DA PÁGINA
+st.set_page_config(page_title="Loja Leoprice V5", page_icon="📱", layout="wide")
 
 st.markdown("""
     <style>
     .main { background-color: #f4f6f9; }
     .product-box { padding: 20px; border-radius: 12px; background-color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 25px; border: 1px solid #eef2f5; }
     .shop-header { padding: 20px; border-radius: 10px; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; margin-bottom: 25px; }
-    .stButton>button { width: 100%; border-radius: 8px; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
 
-# 2. BANCO DE DADOS INTEGRADO (PRODUTOS, LOJAS E CONFIGURAÇÕES)
-def iniciar_banco_completo():
-    conn = sqlite3.connect('sistema_comercial_v5.db')
+# 2. BANCO DE DADOS RECONSTRUÍDO
+def iniciar_banco():
+    conn = sqlite3.connect('banco_leoprice_v5.db')
     cursor = conn.cursor()
     
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS lojas (
+        CREATE TABLE IF NOT EXISTS configuracao (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome_loja TEXT,
             whatsapp TEXT,
-            mpesa_conta TEXT,
-            emola_conta TEXT,
+            mpesa TEXT,
+            emola TEXT,
             facebook TEXT,
             tiktok TEXT
         )
@@ -46,81 +45,74 @@ def iniciar_banco_completo():
         )
     ''')
     
-    # Inserir dados padrão da loja se estiver vazio
-    cursor.execute("SELECT COUNT(*) FROM lojas")
-    if cursor.fetchone() == 0:
+    cursor.execute("SELECT COUNT(*) FROM configuracao")
+    if cursor.fetchone()[0] == 0:
         cursor.execute('''
-            INSERT INTO lojas (nome_loja, whatsapp, mpesa_conta, emola_conta, facebook, tiktok)
+            INSERT INTO configuracao (nome_loja, whatsapp, mpesa, emola, facebook, tiktok)
             VALUES (?, ?, ?, ?, ?, ?)
-        ''', ('Cellshop Leoprice', '258840000000', '841234567', '861234567', 'Cellshop_Leoprice', 'cellshop_leoprice'))
+        ''', ('Loja de celulares Leoprice', '258840000000', '840000000', '860000000', 'Leoprice_Facebook', 'Leoprice_TikTok'))
         
     conn.commit()
     conn.close()
 
-iniciar_banco_completo()
+iniciar_banco()
 
-# 3. FUNÇÕES DE SUPORTE PARA DADOS
-def obter_dados_loja():
-    conn = sqlite3.connect('sistema_comercial_v5.db')
-    df = pd.read_sql_query("SELECT * FROM lojas LIMIT 1", conn)
+# 3. FUNÇÕES DE LEITURA
+def obter_config():
+    conn = sqlite3.connect('banco_leoprice_v5.db')
+    df = pd.read_sql_query("SELECT * FROM configuracao LIMIT 1", conn)
     conn.close()
     return df.iloc[0] if not df.empty else None
 
 def carregar_produtos():
-    conn = sqlite3.connect('sistema_comercial_v5.db')
+    conn = sqlite3.connect('banco_leoprice_v5.db')
     df = pd.read_sql_query("SELECT * FROM produtos", conn)
     conn.close()
     return df
 
-# 4. GESTÃO DE NAVEGAÇÃO (Abas entre Catálogo e Painel Administrador)
-aba1, aba2 = st.tabs(["🛒 Catálogo da Loja", "⚙️ Painel de Gestão da Loja"])
+# 4. CRIAÇÃO DAS ABAS PRINCIPAIS
+aba_catalogo, aba_painel = st.tabs(["🛒 Catálogo de Vendas", "⚙️ Painel do Administrador"])
 
-dados_loja = obter_dados_loja()
-whatsapp_loja = dados_loja['whatsapp'] if dados_loja is not None else "258840000000"
-nome_loja = dados_loja['nome_loja'] if dados_loja is not None else "Minha Loja"
+config = obter_config()
+nome_loja_atual = config['nome_loja'] if config is not None else "Loja Leoprice"
+whatsapp_atual = config['whatsapp'] if config is not None else "258840000000"
 
-# Inicializar carrinho de compras no estado da sessão
 if 'carrinho' not in st.session_state:
     st.session_state.carrinho = {}
 
 # ==========================================
-# ABA 1: INTERFACE DO CATÁLOGO COMERCIAL
+# INTERFACE DO CATÁLOGO
 # ==========================================
-with aba1:
+with aba_catalogo:
     st.markdown(f"""
         <div class='shop-header'>
-            <h1 style='margin:0;'>🏪 {nome_loja}</h1>
-            <p style='margin:5px 0 0 0;'>Monte as suas compras e finalize diretamente pelo WhatsApp!</p>
+            <h1 style='margin:0;color:white;'>🏪 {nome_loja_atual}</h1>
+            <p style='margin:5px 0 0 0;color:white;'>Escolha os seus produtos e pague via M-Pesa ou e-Mola!</p>
         </div>
     """, unsafe_allow_html=True)
     
-    df_prods = carregar_produtos()
+    df_produtos = carregar_produtos()
     
-    # Filtro Lateral de Categorias
-    st.sidebar.header("🔍 Filtros de Busca")
-    if not df_prods.empty:
-        cats = ["Todos"] + list(df_prods['categoria'].unique())
-        categoria_sel = st.sidebar.selectbox("Escolha uma categoria:", cats)
-        if categoria_sel != "Todos":
-            df_prods = df_prods[df_prods['categoria'] == categoria_sel]
-    else:
-        st.sidebar.info("Nenhum produto cadastrado no momento.")
-        
+    # Filtros e dados do cliente no menu lateral
+    st.sidebar.header("⚙️ Filtros e Dados")
+    if not df_produtos.empty:
+        categorias = ["Todos"] + list(df_produtos['categoria'].unique())
+        cat_selecionada = st.sidebar.selectbox("Filtrar por Categoria:", categories)
+        if cat_selecionada != "Todos":
+            df_produtos = df_produtos[df_produtos['categoria'] == cat_selecionada]
+            
     st.sidebar.markdown("---")
-    st.sidebar.header("👤 Informações do Cliente")
-    nome_cliente = st.sidebar.text_input("Introduza o seu Nome:", placeholder="Ex: Leonardo Francisco")
-    pagamento_sel = st.sidebar.selectbox("Forma de Pagamento Desejada:", ["M-Pesa", "e-Mola", "Dinheiro"])
+    nome_cliente = st.sidebar.text_input("O seu Nome:", placeholder="Ex: Leonardo Francisco")
+    metodo_pago = st.sidebar.selectbox("Pagar via:", ["M-Pesa", "e-Mola", "Dinheiro"])
 
-    if df_prods.empty:
-        st.info("Nenhum produto em exibição de momento. Acesse a aba administrativa para adicionar os primeiros produtos através da sua galeria.")
+    if df_produtos.empty:
+        st.info("Nenhum produto cadastrado. Vá à aba 'Painel do Administrador' para adicionar itens da galeria.")
     else:
-        # Grelha de exibição de produtos (3 por linha)
         cols = st.columns(3)
-        for idx, row in df_prods.reset_index().iterrows():
+        for idx, row in df_produtos.reset_index().iterrows():
             with cols[idx % 3]:
                 st.markdown("<div class='product-box'>", unsafe_allow_html=True)
                 
-                # Exibição de Imagem da Galeria (BLOB) ou padrão
                 if row['imagem']:
                     st.image(row['imagem'], use_container_width=True)
                 else:
@@ -129,99 +121,119 @@ with aba1:
                 st.subheader(row['nome'])
                 st.write(f"*{row['descricao']}*")
                 st.markdown(f"### **{row['preco']:.2f} MT**")
-                st.caption(f"📁 Categoria: {row['categoria']}")
                 
-                # Controlo de quantidades interno
                 pid = str(row['id'])
                 qtd_atual = st.session_state.carrinho.get(pid, 0)
                 
-                c_menos, c_qtd, c_mais = st.columns(3)
-                with c_menos:
-                    if st.button("➖", key=f"btn_sub_{pid}"):
+                c1, c2, c3 = st.columns(3)
+                with c1:
+                    if st.button("➖", key=f"sub_{pid}"):
                         st.session_state.carrinho[pid] = max(0, qtd_atual - 1)
-                        if st.session_state.carrinho[pid] == 0 and pid in st.session_state.carrinho:
-                            del st.session_state.carrinho[pid]
                         st.rerun()
-                with c_qtd:
-                    st.markdown(f"<h4 style='text-align:center; margin-top:5px;'>{qtd_atual}</h4>", unsafe_allow_html=True)
-                with c_mais:
-                    if st.button("➕", key=f"btn_add_{pid}"):
+                with c2:
+                    st.markdown(f"<h4 style='text-align:center;'>{qtd_atual}</h4>", unsafe_allow_html=True)
+                with c3:
+                    if st.button("➕", key=f"add_{pid}"):
                         st.session_state.carrinho[pid] = qtd_atual + 1
                         st.rerun()
-                        
                 st.markdown("</div>", unsafe_allow_html=True)
 
-    # Resumo da Encomenda e Fecho de Carrinho
+    # RESUMO DA COMPRA
     st.markdown("---")
-    st.header("🛒 Resumo da sua Encomenda")
+    st.header("🛒 Resumo da Compra")
     
-    # Filtrar chaves vazias ou com valor zero
-    carrinho_ativo = {k: v for k, v in st.session_state.carrinho.items() if v > 0}
+    carrinho_filtrado = {k: v for k, v in st.session_state.carrinho.items() if v > 0}
     
-    if not carrinho_ativo:
-        st.info("O seu carrinho de compras está atualmente vazio.")
+    if not carrinho_filtrado:
+        st.info("O carrinho está vazio.")
     else:
-        lista_resumo = []
-        total_pagar = 0.0
+        tabela_dados = []
+        total_geral = 0.0
         
-        texto_wa = f"Olá, {nome_loja}! Nova encomenda gerada pelo catálogo:\n\n"
+        mensagem_whatsapp = f"Olá, {nome_loja_atual}! Gostaria de fechar este pedido:\n\n"
         if nome_cliente:
-            texto_wa += f"👤 *Cliente:* {nome_cliente}\n"
-        texto_wa += f"💳 *Método de Pagamento Escolhido:* {pagamento_sel}\n"
-        texto_wa += "-----------------------------------------\n"
+            mensagem_whatsapp += f"👤 *Cliente:* {nome_cliente}\n"
+        mensagem_whatsapp += f"💳 *Pagamento por:* {metodo_pago}\n"
+        mensagem_whatsapp += "---------------------------------\n"
         
-        for pid, qtd in carrinho_ativo.items():
-            info_p = df_prods[df_prods['id'] == int(pid)].iloc[0]
-            sub = info_p['preco'] * qtd
-            total_pagar += sub
+        for pid, qtd in carrinho_filtrado.items():
+            prod_row = df_produtos[df_produtos['id'] == int(pid)].iloc[0]
+            subtotal = prod_row['preco'] * qtd
+            total_geral += subtotal
             
-            lista_resumo.append({
-                "Produto": info_p['nome'],
-                "Preço Unitário": f"{info_p['preco']:.2f} MT",
-                "Quantidade": qtd,
-                "Subtotal": f"{sub:.2f} MT"
+            tabela_dados.append({
+                "Item": prod_row['nome'],
+                "Preço": f"{prod_row['preco']:.2f} MT",
+                "Qtd": qtd,
+                "Subtotal": f"{subtotal:.2f} MT"
             })
-            texto_wa += f"• {qtd}x *{info_p['nome']}* -> *{sub:.2f} MT*\n"
+            mensagem_whatsapp += f"• {qtd}x *{prod_row['nome']}* -> *{subtotal:.2f} MT*\n"
             
-        texto_wa += "-----------------------------------------\n"
-        texto_wa += f"💰 *VALOR TOTAL:* {total_pagar:.2f} MT\n\n"
+        mensagem_whatsapp += "---------------------------------\n"
+        mensagem_whatsapp += f"💰 *TOTAL A PAGAR:* {total_geral:.2f} MT\n\n"
         
-        if pagamento_sel == "M-Pesa" and dados_loja is not None:
-            texto_wa += f"📌 Por favor envie o valor para a conta M-Pesa: *{dados_loja['mpesa_conta']}*\n"
-        elif pagamento_sel == "e-Mola" and dados_loja is not None:
-            texto_wa += f"📌 Por favor envie o valor para a conta e-Mola: *{dados_loja['emola_conta']}*\n"
+        if metodo_pago == "M-Pesa" and config is not None:
+            mensagem_whatsapp += f"📌 Enviar para o M-Pesa: *{config['mpesa']}*\n"
+        elif metodo_pago == "e-Mola" and config is not None:
+            mensagem_whatsapp += f"📌 Enviar para o e-Mola: *{config['emola']}*\n"
             
-        st.table(pd.DataFrame(lista_resumo))
-        st.markdown(f"## **Total Final: {total_pagar:.2f} MT**")
+        st.table(pd.DataFrame(tabela_dados))
+        st.markdown(f"## **Total: {total_geral:.2f} MT**")
         
-        # Geração dinâmica do QR Code de Pagamento
-        st.markdown("### 📱 QR Code para Pagamento Rápido")
-        info_qr = f"Pagamento para {nome_loja}. Total: {total_pagar:.2f} MT. Conta: " + (dados_loja['mpesa_conta'] if pagamento_sel == "M-Pesa" else dados_loja['emola_conta'])
-        qr = qrcode.QRCode(version=1, box_size=10, border=4)
-        qr.add_data(info_qr)
-        qr.make(fit=True)
-        img_qr = qr.make_image(fill_color="black", back_color="white")
+        # QR Code Gerado Automaticamente
+        qr_data = f"Loja: {nome_loja_atual} | Total: {total_geral:.2f} MT | Conta: " + (config['mpesa'] if metodo_pago == "M-Pesa" else config['emola'])
+        qr = qrcode.make(qr_data)
+        buffer = BytesIO()
+        qr.save(buffer, format="PNG")
+        st.image(buffer.getvalue(), caption="Aponte a câmera para pagar", width=200)
         
-        buf = BytesIO()
-        img_qr.save(buf, format="PNG")
-        st.image(buf.getvalue(), caption="Aponte a câmera para validar os dados da transferência móvel.", width=250)
-        
-        texto_codificado = urllib.parse.quote(texto_wa)
-        st.link_button("🚀 Concluir Pedido e Enviar via WhatsApp", f"https://wa.me{whatsapp_loja}?text={texto_codificado}")
+        texto_final = urllib.parse.quote(mensagem_whatsapp)
+        st.link_button("🚀 Enviar Pedido para o WhatsApp", f"https://wa.me{whatsapp_atual}?text={texto_final}")
 
 # ==========================================
-# ABA 2: PAINEL ADMINISTRATIVO (GESTÃO DA LOJA)
+# PAINEL ADMINISTRATIVO
 # ==========================================
-with aba2:
-    st.header("⚙️ Painel de Configurações Administrativas")
+with aba_painel:
+    st.header("⚙️ Gestão de Dados da Loja")
     
-    # 1. Configurações de Identidade da Loja e Contas Móveis
-    with st.expander("🏬 Editar Dados da Loja e Contas de Pagamento", expanded=False):
-        if dados_loja is not None:
-            novo_nome = st.text_input("Nome Comercial da Loja:", value=dados_loja['nome_loja'])
-            novo_wa = st.text_input("Contacto de WhatsApp (Com código do país, ex: 258...):", value=dados_loja['whatsapp'])
-            novo_mpesa = st.text_input("Número de Conta M-Pesa para Recebimento:", value=dados_loja['mpesa_conta'])
-            novo_emola = st.text_input("Número de Conta e-Mola para Recebimento:", value=dados_loja['emola_conta'])
-            novo_fb = st.text_input("Link do Facebook da Loja:", value=dados_loja['facebook'])
-            novo_tk = st.text_input("Link do TikTok da Loja:", value=dados_loja['tiktok'])
+    with st.expander("🏬 Configurar Nome e Contas de Pagamento"):
+        if config is not None:
+            n_nome = st.text_input("Nome da Loja:", value=config['nome_loja'])
+            n_wa = st.text_input("WhatsApp (ex: 258...):", value=config['whatsapp'])
+            n_mpesa = st.text_input("Número M-Pesa:", value=config['mpesa'])
+            n_emola = st.text_input("Número e-Mola:", value=config['emola'])
+            n_fb = st.text_input("Facebook link:", value=config['facebook'])
+            n_tk = st.text_input("TikTok link:", value=config['tiktok'])
             
+            if st.button("Guardar Dados da Loja"):
+                conn = sqlite3.connect('banco_leoprice_v5.db')
+                cursor = conn.cursor()
+                cursor.execute('''
+                    UPDATE configuracao SET nome_loja=?, whatsapp=?, mpesa=?, emola=?, facebook=?, tiktok=? WHERE id=1
+                ''', (n_nome, n_wa, n_mpesa, n_emola, n_fb, n_tk))
+                conn.commit()
+                conn.close()
+                st.success("Dados guardados! Atualize a página.")
+                st.rerun()
+
+    with st.expander("➕ Adicionar Novo Produto (Carregar da Galeria)", expanded=True):
+        p_nome = st.text_input("Nome do Produto:")
+        p_preco = st.number_input("Preço (MT):", min_value=0.0, step=10.0)
+        p_cat = st.selectbox("Categoria:", ["Smartphones", "Acessórios", "Outros"])
+        p_desc = st.text_area("Descrição do Item:")
+        p_foto = st.file_uploader("Escolha a Imagem da Galeria:", type=["jpg", "png", "jpeg"])
+        
+        if st.button("Cadastrar Produto"):
+            if p_nome and p_preco > 0:
+                bytes_foto = None
+                if p_foto is not None:
+                    img = Image.open(p_foto)
+                    buf = BytesIO()
+                    img.save(buf, format="JPEG")
+                    bytes_foto = buf.getvalue()
+                    
+                conn = sqlite3.connect('banco_leoprice_v5.db')
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO produtos (nome, preco, categoria, imagem, descricao)
+                    VALUES (?, ?, ?, ?, ?)
