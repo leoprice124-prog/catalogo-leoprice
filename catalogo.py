@@ -6,7 +6,7 @@ import urllib.parse
 # 1. CONFIGURAÇÃO VISUAL DA PÁGINA
 st.set_page_config(page_title="Cellshop Leoprice - V5 Máxima", page_icon="📱", layout="wide")
 
-# Estilização profissional via CSS
+# Estilização profissional via CSS (CORREÇÃO CRÍTICA: Mudado para unsafe_allow_html=True)
 st.markdown("""
     <style>
     .main { background-color: #f8f9fa; }
@@ -14,7 +14,7 @@ st.markdown("""
     .stButton>button:hover { background-color: #128C7E; color: white; }
     .product-box { padding: 15px; border-radius: 10px; background-color: white; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin-bottom: 20px; }
     </style>
-""", unsafe_with_html=True)
+""", unsafe_allow_html=True)
 
 # 2. BASE DE DADOS COMPLETA DA VERSÃO V5 MÁXIMA
 def iniciar_db_maxima():
@@ -95,7 +95,7 @@ else:
     cols = st.columns(3)
     for idx, row in df_exibicao.reset_index().iterrows():
         with cols[idx % 3]:
-            st.markdown(f'<div class="product-box">', unsafe_with_html=True)
+            st.markdown(f'<div class="product-box">', unsafe_allow_html=True)
             st.image(row["imagem"], use_container_width=True)
             st.subheader(row["nome"])
             st.write(f"*{row['descricao']}*")
@@ -106,7 +106,7 @@ else:
             prod_id = str(row["id"])
             qtd_atual = st.session_state.carrinho.get(prod_id, 0)
             
-            col_menos, col_qtd, col_mais = st.columns([1, 2, 1])
+            col_menos, col_qtd, col_mais = st.columns()
             with col_menos:
                 if st.button("➖", key=f"sub_{prod_id}"):
                     if prod_id in st.session_state.carrinho:
@@ -118,9 +118,9 @@ else:
                 st.markdown(f"<h4 style='text-align: center; margin-top: 5px;'>{qtd_atual}</h4>", unsafe_with_html=True)
             with col_mais:
                 if st.button("➕", key=f"add_{prod_id}"):
-                    st.session_state.carrinho[prod_id] = st.session_state.carrinho.get(prod_id, 0) + 1
+                    st.session_state.carrinho[prod_id] = st.session_state.get('carrinho', {}).get(prod_id, 0) + 1
                     st.rerun()
-            st.markdown('</div>', unsafe_with_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
 
 # 8. RESUMO DO CARRINHO DE COMPRAS E GERADOR DO LINK WHATSAPP MÁXIMO
 st.markdown("---")
@@ -161,7 +161,7 @@ else:
     # Exibir tabela organizada para o cliente validar
     st.table(pd.DataFrame(linhas_resumo))
     
-    col_vazia, col_total = st.columns([2, 1])
+    col_vazia, col_total = st.columns()
     with col_total:
         st.markdown(f"## **Total: {total_geral:.2f} MT**")
         
