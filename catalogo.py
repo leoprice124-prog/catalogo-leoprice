@@ -66,7 +66,7 @@ def obter_config():
     conn = sqlite3.connect('banco_leoprice_completo.db')
     df = pd.read_sql_query("SELECT * FROM configuracao LIMIT 1", conn)
     conn.close()
-    return df.iloc[0] if not df.empty else None
+    return df.iloc if not df.empty else None
 
 def carregar_produtos():
     conn = sqlite3.connect('banco_leoprice_completo.db')
@@ -118,7 +118,6 @@ with aba_catalogo:
             with cols[idx % 3]:
                 st.markdown("<div class='product-box'>", unsafe_allow_html=True)
                 
-                # Leitura segura de imagem via link de texto
                 link_imagem = row['imagem'] if row['imagem'] else "https://placeholder.com"
                 st.image(link_imagem, use_container_width=True)
                     
@@ -161,10 +160,9 @@ with aba_catalogo:
         mensagem_whatsapp += f"💳 *Forma de Pagamento:* {metodo_pago}\n"
         mensagem_whatsapp += "---------------------------------\n"
         
-        # Recarregar df completo para evitar problemas com filtros aplicados
         df_completo = carregar_produtos()
         for pid, qtd in carrinho_filtrado.items():
-            prod_row = df_completo[df_completo['id'] == int(pid)].iloc[0]
+            prod_row = df_completo[df_completo['id'] == int(pid)].iloc
             subtotal = prod_row['preco'] * qtd
             total_geral += subtotal
             
@@ -201,13 +199,14 @@ with aba_painel:
         p_preco = st.number_input("Preço de Venda (MT):", min_value=0.0, step=50.0)
         p_cat = st.selectbox("Categoria:", ["Smartphones", "Acessórios", "Carregadores", "Outros"])
         p_desc = st.text_area("Descrição do Item:")
-        p_foto_link = st.text_input("Link da Imagem (URL da foto na internet ou do seu catálogo):", placeholder="https://exemplo.com")
+        p_foto_link = st.text_input("Link da Imagem (URL da foto na internet):", placeholder="https://exemplo.com")
         
         if st.button("📦 Guardar e Publicar Produto"):
             if p_nome and p_preco > 0:
                 conn = sqlite3.connect('banco_leoprice_completo.db')
                 cursor = conn.cursor()
-                cursor.execute('INSERT INTO produtos (nome, preco, category, imagem, descricao) VALUES (?, ?, ?, ?, ?)', (p_nome, p_preco, p_cat, p_foto_link, p_desc))
+                # CORREÇÃO CRÍTICA: Mudado 'category' para 'categoria' para casar com a tabela
+                cursor.execute('INSERT INTO produtos (nome, preco, categoria, imagem, descricao) VALUES (?, ?, ?, ?, ?)', (p_nome, p_preco, p_cat, p_foto_link, p_desc))
                 conn.commit()
                 conn.close()
                 st.success(f"O produto '{p_nome}' foi registado e já está visível para os clientes!")
@@ -222,3 +221,4 @@ with aba_painel:
             n_mpesa = st.text_input("Número M-Pesa da Loja:", value=config['mpesa'])
             n_emola = st.text_input("Número e-Mola da Loja:", value=config['emola'])
             
+            if st.button("💾 Guardar Definições da Loja"):
