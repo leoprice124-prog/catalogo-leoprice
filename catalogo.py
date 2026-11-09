@@ -48,7 +48,7 @@ def iniciar_banco_completo():
     
     # Inserir dados padrão da loja se estiver vazio
     cursor.execute("SELECT COUNT(*) FROM lojas")
-    if cursor.fetchone()[0] == 0:
+    if cursor.fetchone() == 0:
         cursor.execute('''
             INSERT INTO lojas (nome_loja, whatsapp, mpesa_conta, emola_conta, facebook, tiktok)
             VALUES (?, ?, ?, ?, ?, ?)
@@ -135,7 +135,7 @@ with aba1:
                 pid = str(row['id'])
                 qtd_atual = st.session_state.carrinho.get(pid, 0)
                 
-                c_menos, c_qtd, c_mais = st.columns([1, 1, 1])
+                c_menos, c_qtd, c_mais = st.columns(3)
                 with c_menos:
                     if st.button("➖", key=f"btn_sub_{pid}"):
                         st.session_state.carrinho[pid] = max(0, qtd_atual - 1)
@@ -143,7 +143,7 @@ with aba1:
                             del st.session_state.carrinho[pid]
                         st.rerun()
                 with c_qtd:
-                    st.markdown(f"<h4 style='text-align:center; margin-top:5px;'>{qtd_atual}</h4>", unsafe_with_html=False)
+                    st.markdown(f"<h4 style='text-align:center; margin-top:5px;'>{qtd_atual}</h4>", unsafe_allow_html=True)
                 with c_mais:
                     if st.button("➕", key=f"btn_add_{pid}"):
                         st.session_state.carrinho[pid] = qtd_atual + 1
@@ -225,4 +225,3 @@ with aba2:
             novo_fb = st.text_input("Link do Facebook da Loja:", value=dados_loja['facebook'])
             novo_tk = st.text_input("Link do TikTok da Loja:", value=dados_loja['tiktok'])
             
-            if st.button("💾 Guardar Configurações Comerciais"):
