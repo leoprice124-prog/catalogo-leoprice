@@ -8,6 +8,11 @@ from datetime import datetime
 from PIL import Image
 
 st.set_page_config(page_title="Catálogo Multi-Lojas Pro", page_icon="🛍️", layout="wide")
+import streamlit.components.v1 as components
+
+components.html("""
+<script async src="https://googlesyndication.com" crossorigin="anonymous"></script>
+""", height=0)
 
 DB_PATH = "catalogo_vendas_v2.db"
 import shutil
@@ -131,6 +136,14 @@ loja_url = st.query_params.get("loja", "").strip().lower()
 
 with st.sidebar:
     st.title("🛍️ Catálogo Pro")
+        if conn.execute("SELECT COUNT(*) FROM lojas").fetchone() == 0:
+        conn.execute("INSERT INTO lojas (slug, nome_loja, whatsapp, senha_lojista, localizacao, horario, plano_status, expira_em) VALUES (?,?,?,?,?,?,?,?)",
+                     ("loja-oficial-mz", "Vitrine Oficial Moçambique", "258879707294", "1234", "Marracuene & Maputo, Moçambique", "08:00 - 20:00", "Ativa", time.time() + 365*86400))
+        conn.execute("INSERT INTO produtos_catalogo (loja_slug, nome, categoria, descricao, preco_antigo, preco_un, preco_grosso, qtd_min_grosso, cores, stock, esgotado, destaque, imagem_path) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                     ("loja-oficial-mz", "Smartphone Android 128GB", "Eletrónicos", "Novo na caixa com garantia e entrega rápida", 9500.0, 8200.0, 7500.0, 3, "Preto, Azul, Dourado", 15, 0, 1, ""))
+        conn.execute("INSERT INTO produtos_catalogo (loja_slug, nome, categoria, descricao, preco_antigo, preco_un, preco_grosso, qtd_min_grosso, cores, stock, esgotado, destaque, imagem_path) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                     ("loja-oficial-mz", "Ténis Desportivo Conforto", "Moda & Calçados", "Ideal para treino e dia a dia", 2200.0, 1650.0, 1300.0, 5, "Preto, Branco, Vermelho", 25, 0, 1, ""))
+        conn.commit()
     lojas_rows = conn.execute("SELECT * FROM lojas").fetchall()
     loja_atual = None
     if lojas_rows:
@@ -466,3 +479,13 @@ with aba_lojista:
 
 
 
+
+st.divider()
+with st.expander("⚖️ Informações Legais, Privacidade & Sobre Nós (Google AdSense)"):
+    st.markdown("""
+    **Sobre o Catálogo Multi-Lojas Pro:** Plataforma digital moçambicana desenvolvida por **Leonardo Jacinto Francisco** para conectar comerciantes locais e compradores com encomendas diretas via WhatsApp, M-Pesa e e-Mola.
+    
+    **Política de Privacidade & Cookies:** Este site utiliza cookies e tecnologias de publicidade do **Google AdSense** (`ca-pub-7971514992716083`) para exibir anúncios relevantes aos visitantes. Não vendemos nem partilhamos dados pessoais dos utilizadores com terceiros.
+    
+    **Termos de Uso & Contacto:** Os preços, stocks e entregas são da responsabilidade de cada loja verificada. Para suporte técnico ou abertura de loja, contacte: **leoprice124@gmail.com** | WhatsApp: **+258 87 970 7294** (Marracuene, Maputo - Moçambique).
+    """)
