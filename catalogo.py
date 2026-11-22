@@ -389,7 +389,8 @@ with t4:
                     conn.execute("UPDATE lojas SET nome_loja=?, whatsapp=?, localizacao=?, horario=?, loja_aberta=? WHERE slug=?",
                                  (ed_nome.strip(), ed_wa.strip(), ed_loc.strip(), ed_hor.strip(), 1 if ed_ab else 0, sg))
                     conn.commit(); st.success("✅ Dados da loja atualizados!"); st.rerun()
-                st.divider()                st.image(f"https://qrserver.com{sg}", caption="QR Code")
+                st.divider()
+                st.image(f"https://qrserver.com{sg}", caption="QR Code")
                 f_bg = st.file_uploader("🖼️ Fundo / Background:", type=["png", "jpg", "jpeg"])
                 if f_bg and st.button("Aplicar / Apply"):
                     p_bg = os.path.join("imagens_catalogo", f"bg_{sg}.png")
