@@ -190,7 +190,7 @@ if "carrinho" not in st.session_state: st.session_state["carrinho"] = []
 qtd_lojas, = conn.execute("SELECT COUNT(*) FROM lojas").fetchone()
 if qtd_lojas == 0:
     conn.execute("INSERT INTO lojas (slug, nome_loja, whatsapp, senha_lojista, localizacao, plano_status, expira_em) VALUES (?,?,?,?,?,?,?)",
-                 ("loja-oficial-mz", "Vitrine Oficial Moçambique", "258879707294", "1234", "Marracuene & Maputo", "Ativa", time.time() + 365*86400))
+                 ("loja-oficial-mz", "Vitrine Oficial Moçambique", "258879707294", "1234", "Marracuene & Maputo", "Ativa", time.time() + 365*86400)); conn.execute("INSERT OR IGNORE INTO lojas (slug, nome_loja, whatsapp, senha_lojista, localizacao, plano_status, expira_em) VALUES (?,?,?,?,?,?,?)", ("magui_fashion", "Magui Fashion", "258879707294", "1234", "Marracuene & Maputo", "Ativa", time.time() + 30*86400))
     conn.execute("INSERT INTO produtos_catalogo (loja_slug, nome, categoria, descricao, preco_antigo, preco_un, preco_grosso, qtd_min_grosso, cores, stock, esgotado, destaque) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                  ("loja-oficial-mz", "Smartphone Android 128GB", "Eletrónicos", "Novo na caixa com garantia", 9500.0, 8200.0, 7500.0, 3, "Preto, Azul, Dourado", 15, 0, 1))
     conn.commit()
@@ -209,7 +209,7 @@ with st.sidebar:
             if qp_loja and f"(@{qp_loja})" in k_txt:
                 idx_def = idx_k
                 break
-        esc = st.selectbox(T["loja"], list(mapa.keys()), index=idx_def)
+        esc = list(mapa.keys())[idx_def] if (qp_loja and any(f"(@{qp_loja})" in k for k in mapa.keys())) else st.selectbox(T["loja"], list(mapa.keys()), index=idx_def)
         loja_atual = mapa[esc]
 
     st.divider()
@@ -378,7 +378,18 @@ with t4:
                     if cc.button("🗑️", key=f"d_{id_p}"):
                         conn.execute("DELETE FROM produtos_catalogo WHERE id=?", (id_p,)); conn.commit(); st.rerun()
                 st.divider()
-                st.image(f"https://qrserver.com{sg}", caption="QR Code")
+                st.divider()
+                st.markdown("#### ✏️ Editar Dados da Loja")
+                ed_nome = st.text_input("Nome da Loja:", value=ng, key="ed_nm")
+                ed_wa = st.text_input("WhatsApp:", value=wg, key="ed_wa")
+                ed_loc = st.text_input("Localização:", value=lg, key="ed_lc")
+                ed_hor = st.text_input("Horário:", value=horg, key="ed_hr")
+                ed_ab = st.checkbox("Loja Aberta Agora", value=(abg == 1), key="ed_ab")
+                if st.button("💾 Atualizar Dados da Loja") and ed_nome.strip():
+                    conn.execute("UPDATE lojas SET nome_loja=?, whatsapp=?, localizacao=?, horario=?, loja_aberta=? WHERE slug=?",
+                                 (ed_nome.strip(), ed_wa.strip(), ed_loc.strip(), ed_hor.strip(), 1 if ed_ab else 0, sg))
+                    conn.commit(); st.success("✅ Dados da loja atualizados!"); st.rerun()
+                st.divider()                st.image(f"https://qrserver.com{sg}", caption="QR Code")
                 f_bg = st.file_uploader("🖼️ Fundo / Background:", type=["png", "jpg", "jpeg"])
                 if f_bg and st.button("Aplicar / Apply"):
                     p_bg = os.path.join("imagens_catalogo", f"bg_{sg}.png")
