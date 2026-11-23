@@ -411,4 +411,4 @@ with t4:
                 conn.commit(); st.success("✅"); st.rerun()
 
 st.divider()
-st.caption("Catálogo Multi-Lojas Pro • Leonardo Jacinto Francisco • AdSense: ca-pub-7971514992716083 • Contacto: +258 87 970 7294")
+st.caption("Catálogo Multi-Lojas Pro • Leonardo Jacinto Francisco • AdSense: ca-pub-6467621234967556 • Contacto: +258 87 970 7294")
